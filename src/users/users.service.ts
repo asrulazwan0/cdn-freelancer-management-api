@@ -1,44 +1,50 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { UserInterface } from './interfaces/user.interface';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  private users: UserInterface[] = [];
 
-  createUser(user: CreateUserDto): UserInterface {
-    const newUser = { id: Date.now().toString(), ...user };
-    this.users.push(newUser);
-    return newUser;
+  constructor(
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  ) {}
+
+  async createUser(createUserDto: CreateUserDto): Promise<User> {
+    const createdUser = new this.userModel(createUserDto);
+    return createdUser.save();
   }
 
-  getAllUsers(): UserInterface[] {
-    return this.users;
+  async getAllUsers(): Promise<User[]> {
+    return this.userModel.find().exec();
   }
 
-  getUserById(id: string): UserInterface {
-    const user = this.users.find((u) => u.id === id);
+  async getUserById(id: string): Promise<User> {
+    const user = await this.userModel.findById(id).exec();
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException('User not found');
     }
     return user;
   }
 
-  updateUser(id: string, user: UpdateUserDto): UserInterface {
-    const index = this.users.findIndex((u) => u.id === id);
-    if (index === -1) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+  async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    const updatedUser = await this.userModel.findByIdAndUpdate(
+      id,
+      updateUserDto,
+      { new: true },
+    );
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
     }
-    this.users[index] = { ...this.users[index], ...user };
-    return this.users[index];
+    return updatedUser;
   }
 
-  deleteUser(id: string): void {
-    const index = this.users.findIndex((u) => u.id === id);
-    if (index === -1) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+  async deleteUser(id: string): Promise<void> {
+    const result = await this.userModel.deleteOne({ _id: id }).exec();
+    if (result.deletedCount === 0) {
+      throw new NotFoundException('User not found');
     }
-    this.users.splice(index, 1);
   }
 }
